@@ -113,6 +113,7 @@ def get_llm_runtime_config() -> Optional[LLMConfig]:
         model=model,
         type=tp,
         base_url=cfg.get("LLM_baseurl") or None,
+        llm_format=(cfg.get("LLM_format") or "").strip().lower() or None,
     )
 
 
