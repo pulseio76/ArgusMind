@@ -29,6 +29,8 @@ class LLMConfigUpdate(BaseModel):
     LLM_model: Optional[str] = None
     LLM_baseurl: Optional[str] = None
     type: Optional[str] = None
+    # 自定义 Provider 的 API 协议格式：openai | anthropic
+    LLM_format: Optional[str] = None
 
 
 class CodeAgentConfigUpdate(BaseModel):

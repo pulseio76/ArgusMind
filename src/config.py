@@ -138,6 +138,11 @@ class LLMConfig:
     base_url: Optional[str] = None
     api_version: Optional[str] = None
     azure_endpoint: Optional[str] = None
+    # API 协议格式：仅对「自定义 Provider」生效，用于路由到对应的上游端点。
+    #   "openai"     -> OpenAI 兼容（/v1/chat/completions）
+    #   "anthropic"  -> Anthropic 格式（/v1/messages）
+    # 为空时按 base_url 启发式推断（含 /anthropic 视作 anthropic，否则 openai）。
+    llm_format: Optional[str] = None
 
 
 @dataclass

@@ -109,23 +109,52 @@ class LLMClient:
         self.config = config
 
     def _litellm_kwargs(self, temperature: float = 0.7, max_tokens: Optional[int] = None, **kwargs) -> Dict:
-        """从 config 构建 litellm completion 参数，不依赖环境变量"""
-        model = self.config.model
-        if "/" not in model and self.config.provider:
-            model = f"{self.config.provider}/{model}"
+        """从 config 构建 litellm completion 参数，不依赖环境变量。
+
+        路由策略（单点收口）：
+        - 内置 provider（deepseek / anthropic / openai / azure ...）：使用 litellm 原生
+          `provider/model` 形式，由 litellm 自行解析 base_url / 鉴权。
+        - 自定义 provider：统一通过 ``custom_llm_provider`` 指定上游协议格式，
+          传 **裸模型名**（不带 provider 前缀）+ ``api_base``，避免把任意 provider ID
+          拼成 ``<custom-id>/<model>`` 这种 litellm 无法识别的前缀。
+          协议格式由 ``llm_format`` 决定（openai / anthropic），缺省时按 base_url 启发式。
+        """
+        model = (self.config.model or "").strip()
+        provider = (self.config.provider or "").strip()
+        is_custom = (self.config.type or "").strip().lower() == "custom"
+
         kw: Dict = {
-            "model": model,
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
         if self.config.api_key:
             kw["api_key"] = self.config.api_key
-        # base_url：自建或自定义端点；Azure 时也可用 azure_endpoint
-        api_base = self.config.base_url or getattr(self.config, "azure_endpoint", None)
-        if api_base and self.config.type != "builtin":
-            kw["api_base"] = api_base
         if getattr(self.config, "api_version", None):
             kw["api_version"] = self.config.api_version
+
+        api_base = self.config.base_url or getattr(self.config, "azure_endpoint", None)
+
+        if is_custom:
+            # 自定义 Provider：不要拼 provider 前缀，用 custom_llm_provider 路由协议格式
+            fmt = (self.config.llm_format or "").strip().lower()
+            if not fmt:
+                # 启发式：base_url 含 /anthropic 视作 Anthropic 格式端点，否则 OpenAI 兼容
+                fmt = "anthropic" if "/anthropic" in (api_base or "").lower() else "openai"
+            fmt = fmt if fmt in ("openai", "anthropic") else "openai"
+            kw["model"] = model
+            kw["custom_llm_provider"] = fmt
+            if api_base:
+                kw["api_base"] = api_base
+        else:
+            # 内置 provider：litellm 原生 provider/model 形式
+            litellm_model = model
+            if "/" not in litellm_model and provider:
+                litellm_model = f"{provider}/{litellm_model}"
+            kw["model"] = litellm_model
+            # 自建/兼容端点：builtin 模式下仍允许覆盖 base_url（如自托管的 openai 网关）
+            if api_base:
+                kw["api_base"] = api_base
+
         kw.update(kwargs)
         return {k: v for k, v in kw.items() if v is not None}
 

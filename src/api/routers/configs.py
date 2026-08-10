@@ -87,9 +87,22 @@ def test_llm_config() -> OkResponse[str]:
 
     try:
         client = LLMClient(runtime_cfg)
+        # 暴露实际路由参数，便于排查「连不上 / 报错」时定位是 model 前缀还是 base_url 问题
+        routed_kwargs = client._litellm_kwargs(temperature=0.7, max_tokens=None)
+        diagnosis = {
+            "route": {
+                "model": routed_kwargs.get("model"),
+                "custom_llm_provider": routed_kwargs.get("custom_llm_provider"),
+                "api_base": routed_kwargs.get("api_base"),
+                "is_custom": (runtime_cfg.type or "").strip().lower() == "custom",
+                "llm_format": runtime_cfg.llm_format,
+            },
+        }
         resp = client.call([{"role": "user", "content": "hello"}])
-        raw_json = json.dumps(_to_jsonable(resp.raw), ensure_ascii=False)
-        return OkResponse[str](data=raw_json)
+        diagnosis["reply"] = resp.content
+        diagnosis["usage"] = resp.usage
+        diagnosis["ok"] = True
+        return OkResponse[str](data=json.dumps(diagnosis, ensure_ascii=False))
     except Exception as ex:
         return OkResponse[str](
             success=False,
