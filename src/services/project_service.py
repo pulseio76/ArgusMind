@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import ipaddress
 import shutil
+import stat
 import socket
 import subprocess
 import uuid
@@ -140,6 +141,9 @@ def _extract_archive_flatten_root(archive_path: Path, dest_dir: Path) -> None:
             for name in names:
                 candidate = dest_dir / name
                 _ensure_child_path(dest_dir, candidate)
+            for info in zf.infolist():
+                if stat.S_ISLNK(info.external_attr >> 16):
+                    raise AppException("压缩包中不允许符号链接")
             zf.extractall(dest_dir)
     except zipfile.BadZipFile as ex:
         raise AppException("仅支持 zip 压缩包") from ex
